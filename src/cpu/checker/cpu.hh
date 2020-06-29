@@ -136,6 +136,7 @@ class CheckerCPU : public BaseCPU, public ExecContext
 
     BaseTLB *itb;
     BaseTLB *dtb;
+    BaseTLB *l2tlb;
 
     Addr dbg_vtophys(Addr addr);
 
@@ -159,6 +160,7 @@ class CheckerCPU : public BaseCPU, public ExecContext
 
     BaseTLB* getITBPtr() { return itb; }
     BaseTLB* getDTBPtr() { return dtb; }
+    BaseTLB* getL2TLBPtr() { return l2tlb; }
 
     virtual Counter totalInsts() const override
     {

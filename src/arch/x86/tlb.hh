@@ -92,6 +92,8 @@ namespace X86ISA
 
       protected:
         uint32_t size;
+        uint32_t assoc;
+        bool enable;
 
         std::vector<TlbEntry> tlb;
 
@@ -126,7 +128,7 @@ namespace X86ISA
 
         Fault translateAtomic(
             const RequestPtr &req, ThreadContext *tc, Mode mode) override;
-        void translateTiming(
+        Fault translateTiming(
             const RequestPtr &req, ThreadContext *tc,
             Translation *translation, Mode mode) override;
 

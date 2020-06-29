@@ -100,7 +100,7 @@ BaseSimpleCPU::BaseSimpleCPU(BaseSimpleCPUParams *p)
                                       p->itb, p->dtb, p->isa[i]);
         } else {
             thread = new SimpleThread(this, i, p->system, p->workload[i],
-                                      p->itb, p->dtb, p->isa[i]);
+                                      p->itb, p->dtb, p->isa[i], p->l2tlb);
         }
         threadInfo.push_back(new SimpleExecContext(this, thread));
         ThreadContext *tc = thread->getTC();

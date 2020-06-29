@@ -111,6 +111,8 @@ class O3ThreadContext : public ThreadContext
     /** Returns a pointer to the DTB. */
     BaseTLB *getDTBPtr() override { return cpu->dtb; }
 
+    BaseTLB *getL2TLBPtr() { return 0; }
+
     CheckerCPU *getCheckerCpuPtr() override { return NULL; }
 
     BaseISA *

@@ -78,11 +78,12 @@ def config_cache(options, system):
         dcache_class, icache_class, l2_cache_class, walk_cache_class = \
             core.HPI_DCache, core.HPI_ICache, core.HPI_L2, core.HPI_WalkCache
     else:
-        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            L1_DCache, L1_ICache, L2Cache, None
+        dcache_class, icache_class, l2_cache_class, walk_cache_class, \
+                walk_cache_class_l2 = L1_DCache, L1_ICache, L2Cache, None, None
 
         if buildEnv['TARGET_ISA'] == 'x86':
             walk_cache_class = PageTableWalkerCache
+            walk_cache_class_l2 = PageTableWalkerCacheL2
 
     # Set the cache line size of the system
     system.cache_line_size = options.cacheline_size
@@ -103,15 +104,16 @@ def config_cache(options, system):
                                    assoc=options.l2_assoc)
 
         system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
+
         system.l2.cpu_side = system.tol2bus.master
         system.l2.mem_side = system.membus.slave
         if options.l2_hwp_type:
             hwpClass = ObjectList.hwp_list.get(options.l2_hwp_type)
             if system.l2.prefetcher != "Null":
                 print("Warning: l2-hwp-type is set (", hwpClass, "), but",
-                      "the current l2 has a default Hardware Prefetcher",
-                      "of type", type(system.l2.prefetcher), ", using the",
-                      "specified by the flag option.")
+                    "the current l2 has a default Hardware Prefetcher",
+                    "of type", type(system.l2.prefetcher), ", using the",
+                    "specified by the flag option.")
             system.l2.prefetcher = hwpClass()
 
     if options.memchecker:
@@ -129,9 +131,16 @@ def config_cache(options, system):
             if walk_cache_class:
                 iwalkcache = walk_cache_class()
                 dwalkcache = walk_cache_class()
+
             else:
                 iwalkcache = None
                 dwalkcache = None
+
+            if options.l2tlb:
+                l2wc = walk_cache_class_l2()
+
+            else:
+                l2wc = None
 
             if options.memchecker:
                 dcache_mon = MemCheckerMonitor(warn_only=True)
@@ -168,8 +177,13 @@ def config_cache(options, system):
 
             # When connecting the caches, the clock is also inherited
             # from the CPU in question
+            print("Create CPUs...")
             system.cpu[i].addPrivateSplitL1Caches(icache, dcache,
-                                                  iwalkcache, dwalkcache)
+                                                  iwalkcache, dwalkcache, l2wc)
+
+            # Set the L2 Data TLB...
+            system.cpu[i].L2TLBSettings(options.l2tlb_size, \
+                    options.l2tlb_assoc, options.l2tlb)
 
             if options.memchecker:
                 # The mem_side ports of the caches haven't been connected yet.

@@ -594,16 +594,21 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
 
         Port *old_itb_port = oldTC->getITBPtr()->getTableWalkerPort();
         Port *old_dtb_port = oldTC->getDTBPtr()->getTableWalkerPort();
+        Port *old_l2tlb_port = oldTC->getL2TLBPtr()->getTableL2WalkerPort();
         Port *new_itb_port = newTC->getITBPtr()->getTableWalkerPort();
         Port *new_dtb_port = newTC->getDTBPtr()->getTableWalkerPort();
+        Port *new_l2tlb_port = newTC->getL2TLBPtr()->getTableL2WalkerPort();
 
         // Move over any table walker ports if they exist
         if (new_itb_port)
             new_itb_port->takeOverFrom(old_itb_port);
         if (new_dtb_port)
             new_dtb_port->takeOverFrom(old_dtb_port);
+        if (new_l2tlb_port)
+            new_l2tlb_port->takeOverFrom(old_l2tlb_port);
         newTC->getITBPtr()->takeOverFrom(oldTC->getITBPtr());
         newTC->getDTBPtr()->takeOverFrom(oldTC->getDTBPtr());
+        newTC->getL2TLBPtr()->takeOverFrom(oldTC->getL2TLBPtr());
 
         // Checker whether or not we have to transfer CheckerCPU
         // objects over in the switch
@@ -661,9 +666,11 @@ BaseCPU::flushTLBs()
 
         tc.getITBPtr()->flushAll();
         tc.getDTBPtr()->flushAll();
+        tc.getL2TLBPtr()->flushAll();
         if (checker) {
             checker->getITBPtr()->flushAll();
             checker->getDTBPtr()->flushAll();
+            checker->getL2TLBPtr()->flushAll();
         }
     }
 }

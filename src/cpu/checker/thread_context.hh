@@ -136,6 +136,8 @@ class CheckerThreadContext : public ThreadContext
 
     BaseTLB *getDTBPtr() override { return actualTC->getDTBPtr(); }
 
+    BaseTLB *getL2TLBPtr() { return actualTC->getL2TLBPtr(); }
+
     CheckerCPU *
     getCheckerCpuPtr() override
     {

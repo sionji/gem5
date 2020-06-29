@@ -91,7 +91,7 @@ class BaseTLB : public SimObject
 
     virtual Fault translateAtomic(
             const RequestPtr &req, ThreadContext *tc, Mode mode) = 0;
-    virtual void translateTiming(
+    virtual Fault translateTiming(
             const RequestPtr &req, ThreadContext *tc,
             Translation *translation, Mode mode) = 0;
     virtual Fault
@@ -137,6 +137,8 @@ class BaseTLB : public SimObject
      * @return A pointer to the walker port or NULL if not present
      */
     virtual Port* getTableWalkerPort() { return NULL; }
+
+    virtual Port* getTableL2WalkerPort() { return NULL; }
 
     void memInvalidate() { flushAll(); }
 };

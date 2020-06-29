@@ -58,8 +58,13 @@
 
 namespace X86ISA {
 
+/* TLBs[0] : dtb, TLBs[1] : itb, TLBs[2] : l2tlb */
+static TLB *TLBs[3];
+static int TLBs_cnt = 0;
+
 TLB::TLB(const Params *p)
-    : BaseTLB(p), configAddress(0), size(p->size),
+    : BaseTLB(p), configAddress(0),
+      size(p->size), assoc(p->assoc), enable(p->enable),
       tlb(size), lruSeq(0), m5opRange(p->system->m5opRange())
 {
     if (!size)
@@ -72,6 +77,13 @@ TLB::TLB(const Params *p)
 
     walker = p->walker;
     walker->setTLB(this);
+    TLBs[TLBs_cnt] = this;
+    printf ("TLBs[%d] : %p \n", TLBs_cnt, TLBs[TLBs_cnt]);
+    TLBs_cnt++;
+
+    printf ("TLB size : %d\n", this->size);
+    printf ("TLB assoc : %d\n", this->assoc);
+    printf ("TLB enabled : %s\n", this->enable ? "true" : "false");
 }
 
 void
@@ -333,10 +345,12 @@ TLB::translate(const RequestPtr &req,
             } else {
                 wrAccesses++;
             }
+
             if (!entry) {
                 DPRINTF(TLB, "Handling a TLB miss for "
                         "address %#x at pc %#x.\n",
                         vaddr, tc->instAddr());
+
                 if (mode == Read) {
                     rdMisses++;
                 } else {
@@ -352,6 +366,19 @@ TLB::translate(const RequestPtr &req,
                     entry = lookup(vaddr);
                     assert(entry);
                 } else {
+                    bool servedByL2 = false;
+                    Fault L2result;
+                    /* ==================================================== */
+                    /* Find at L2 TLB. */
+                    if (this == tc->getDTBPtr() && TLBs[2]->enable) {
+                        TLB *L2TLB = TLBs[2];
+                        L2result = L2TLB->translate(req, tc, translation,
+                                mode, delayedResponse, timing);
+                        servedByL2 = true;
+                    }
+
+                    /* ==================================================== */
+                    /* Write mapping info into TLB. */
                     Process *p = tc->getProcessPtr();
                     const EmulationPageTable::Entry *pte =
                         p->pTable->lookup(vaddr);
@@ -375,6 +402,10 @@ TLB::translate(const RequestPtr &req,
                                 pte->flags & EmulationPageTable::ReadOnly));
                     }
                     DPRINTF(TLB, "Miss was serviced.\n");
+
+                    if (servedByL2)
+                        /* Already served by L2. */
+                        return L2result;
                 }
             }
 
@@ -404,6 +435,7 @@ TLB::translate(const RequestPtr &req,
             req->setPaddr(paddr);
             if (entry->uncacheable)
                 req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
+
         } else {
             //Use the address which already has segmentation applied.
             DPRINTF(TLB, "Paging disabled.\n");
@@ -427,7 +459,7 @@ TLB::translateAtomic(const RequestPtr &req, ThreadContext *tc, Mode mode)
     return TLB::translate(req, tc, NULL, mode, delayedResponse, false);
 }
 
-void
+Fault
 TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
         Translation *translation, Mode mode)
 {
@@ -439,6 +471,8 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
         translation->finish(fault, req, tc, mode);
     else
         translation->markDelayed();
+
+    return fault;
 }
 
 Walker *
@@ -513,10 +547,12 @@ TLB::getTableWalkerPort()
     return &walker->getPort("port");
 }
 
+
 } // namespace X86ISA
 
 X86ISA::TLB *
 X86TLBParams::create()
 {
+    printf ("TLB is created!\n");
     return new X86ISA::TLB(this);
 }

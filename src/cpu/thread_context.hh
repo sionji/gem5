@@ -140,6 +140,8 @@ class ThreadContext : public PCEventScope
 
     virtual BaseTLB *getDTBPtr() = 0;
 
+    virtual BaseTLB *getL2TLBPtr() = 0;
+
     virtual CheckerCPU *getCheckerCpuPtr() = 0;
 
     virtual BaseISA *getIsaPtr() = 0;

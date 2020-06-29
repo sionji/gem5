@@ -138,6 +138,7 @@ class SimpleThread : public ThreadState, public ThreadContext
 
     BaseTLB *itb;
     BaseTLB *dtb;
+    BaseTLB *l2tlb;
 
     TheISA::Decoder decoder;
 
@@ -149,7 +150,7 @@ class SimpleThread : public ThreadState, public ThreadContext
     // SE
     SimpleThread(BaseCPU *_cpu, int _thread_num, System *_system,
                  Process *_process, BaseTLB *_itb, BaseTLB *_dtb,
-                 TheISA::ISA *_isa);
+                 TheISA::ISA *_isa, BaseTLB *_l2tlb);
 
     virtual ~SimpleThread() {}
 
@@ -227,6 +228,8 @@ class SimpleThread : public ThreadState, public ThreadContext
     BaseTLB *getITBPtr() override { return itb; }
 
     BaseTLB *getDTBPtr() override { return dtb; }
+
+    BaseTLB *getL2TLBPtr() { return l2tlb; }
 
     CheckerCPU *getCheckerCpuPtr() override { return NULL; }
 

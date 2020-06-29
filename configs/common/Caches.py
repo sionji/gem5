@@ -100,3 +100,22 @@ class PageTableWalkerCache(Cache):
         is_read_only = True
         # Writeback clean lines as well
         writeback_clean = True
+
+
+class PageTableWalkerCacheL2(Cache):
+    assoc = 2
+    tag_latency = 4
+    data_latency = 4
+    response_latency = 4
+    mshrs = 10
+    size = '4kB'
+    tgts_per_mshr = 12
+
+    # the x86 table walker actually writes to the table-walker cache
+    if buildEnv['TARGET_ISA'] == 'x86':
+        is_read_only = False
+    else:
+        is_read_only = True
+        # Writeback clean lines as well
+        writeback_clean = True
+

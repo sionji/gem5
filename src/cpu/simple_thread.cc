@@ -75,11 +75,12 @@ using namespace std;
 // constructor
 SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
                            Process *_process, BaseTLB *_itb,
-                           BaseTLB *_dtb, TheISA::ISA *_isa)
+                           BaseTLB *_dtb, TheISA::ISA *_isa, BaseTLB *_l2tlb)
     : ThreadState(_cpu, _thread_num, _process), isa(_isa),
       predicate(true), memAccPredicate(true),
       comInstEventQueue("instruction-based event queue"),
-      system(_sys), itb(_itb), dtb(_dtb), decoder(TheISA::Decoder(_isa))
+      system(_sys), itb(_itb), dtb(_dtb), l2tlb(_l2tlb),
+      decoder(TheISA::Decoder(_isa))
 {
     clearArchRegs();
     quiesceEvent = new EndQuiesceEvent(this);

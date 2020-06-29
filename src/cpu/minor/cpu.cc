@@ -62,7 +62,7 @@ MinorCPU::MinorCPU(MinorCPUParams *params) :
         } else {
             thread = new Minor::MinorThread(this, i, params->system,
                     params->workload[i], params->itb, params->dtb,
-                    params->isa[i]);
+                    params->isa[i], params->l2tlb);
         }
 
         threads.push_back(thread);

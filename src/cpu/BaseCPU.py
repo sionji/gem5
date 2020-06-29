@@ -171,8 +171,13 @@ class BaseCPU(ClockedObject):
 
     workload = VectorParam.Process([], "processes to run")
 
+    print("Create dtb...")
     dtb = Param.BaseTLB(ArchDTB(), "Data TLB")
+    print("Create itb...")
     itb = Param.BaseTLB(ArchITB(), "Instruction TLB")
+    print("Create l2tlb...")
+    l2tlb = Param.BaseTLB(ArchDTB(), "L2 Data TLB")
+
     if buildEnv['TARGET_ISA'] == 'power':
         UnifiedTLB = Param.Bool(True, "Is this a Unified TLB?")
     interrupts = VectorParam.BaseInterrupts([], "Interrupt Controller")
@@ -226,7 +231,9 @@ class BaseCPU(ClockedObject):
             uncached_bus = cached_bus
         self.connectUncachedPorts(uncached_bus)
 
-    def addPrivateSplitL1Caches(self, ic, dc, iwc = None, dwc = None):
+    def addPrivateSplitL1Caches(self, ic, dc, iwc = None, \
+            dwc = None, l2wc = None):
+        print ("Call : addPrivateSplitL1Caches")
         self.icache = ic
         self.dcache = dc
         self.icache_port = ic.cpu_side
@@ -238,8 +245,15 @@ class BaseCPU(ClockedObject):
                 self.dtb_walker_cache = dwc
                 self.itb.walker.port = iwc.cpu_side
                 self.dtb.walker.port = dwc.cpu_side
+
                 self._cached_ports += ["itb_walker_cache.mem_side", \
                                        "dtb_walker_cache.mem_side"]
+
+                if l2wc:
+                    self.l2tlb_walker_cache = l2wc
+                    self.l2tlb.walker.port = l2wc.cpu_side
+                    self._cached_ports += ["l2tlb_walker_cache.mem_side"]
+
             else:
                 self._cached_ports += ["itb.walker.port", "dtb.walker.port"]
 
@@ -248,6 +262,11 @@ class BaseCPU(ClockedObject):
             if self.checker != NULL:
                 self._cached_ports += ["checker.itb.walker.port", \
                                        "checker.dtb.walker.port"]
+
+    def L2TLBSettings(self, l2tlb_size, l2tlb_assoc, enable):
+        self.l2tlb.size = l2tlb_size
+        self.l2tlb.assoc = l2tlb_assoc
+        self.l2tlb.enable = enable
 
     def addTwoLevelCacheHierarchy(self, ic, dc, l2c, iwc=None, dwc=None,
                                   xbar=None):

@@ -108,7 +108,7 @@ CheckerCPU::setSystem(System *system)
     } else {
         thread = new SimpleThread(this, 0, systemPtr,
                                   workload.size() ? workload[0] : NULL,
-                                  itb, dtb, p->isa[0]);
+                                  itb, dtb, p->isa[0], p->l2tlb);
     }
 
     tc = thread->getTC();
