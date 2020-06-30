@@ -93,11 +93,14 @@ namespace X86ISA
       protected:
         uint32_t size;
         uint32_t assoc;
+        uint32_t numSets;
+        Addr setMask;
         bool enable;
 
         std::vector<TlbEntry> tlb;
 
-        EntryList freeList;
+        std::vector<EntryList> freeList;
+        std::vector<EntryList> entryList;
 
         TlbEntryTrie trie;
         uint64_t lruSeq;

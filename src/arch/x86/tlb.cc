@@ -65,15 +65,33 @@ static int TLBs_cnt = 0;
 TLB::TLB(const Params *p)
     : BaseTLB(p), configAddress(0),
       size(p->size), assoc(p->assoc), enable(p->enable),
-      tlb(size), lruSeq(0), m5opRange(p->system->m5opRange())
+      lruSeq(0), m5opRange(p->system->m5opRange())
 {
     if (!size)
         fatal("TLBs must have a non-zero size.\n");
 
+    numSets = size/assoc;
+    tlb.assign(size, TlbEntry());
+    freeList.resize(numSets);
+    entryList.resize(numSets);
+
+    for (int set = 0; set < numSets; ++set) {
+        for (int way = 0; way < assoc; ++way) {
+            int x = set *assoc + way;
+            //tlb[x] = nullptr;
+            tlb[x].trieHandle = NULL;
+            freeList[set].push_back(&tlb.at(x));
+        }
+    }
+
+    /* Old code.
     for (int x = 0; x < size; x++) {
         tlb[x].trieHandle = NULL;
         freeList.push_back(&tlb[x]);
     }
+    */
+
+    setMask = numSets - 1;
 
     walker = p->walker;
     walker->setTLB(this);
@@ -92,6 +110,7 @@ TLB::evictLRU()
     // Find the entry with the lowest (and hence least recently updated)
     // sequence number.
 
+    /*
     unsigned lru = 0;
     for (unsigned i = 1; i < size; i++) {
         if (tlb[i].lruSeq < tlb[lru].lruSeq)
@@ -102,50 +121,78 @@ TLB::evictLRU()
     trie.remove(tlb[lru].trieHandle);
     tlb[lru].trieHandle = NULL;
     freeList.push_back(&tlb[lru]);
+    */
 }
 
 TlbEntry *
 TLB::insert(Addr vpn, const TlbEntry &entry)
 {
-    // If somebody beat us to it, just use that existing entry.
-    TlbEntry *newEntry = trie.lookup(vpn);
-    if (newEntry) {
-        assert(newEntry->vaddr == vpn);
-        return newEntry;
+    int set = (vpn >> TheISA::PageShift) & setMask;
+    TlbEntry *newEntry = nullptr;
+
+    if (!freeList[set].empty()) {
+        newEntry = freeList[set].front();
+        freeList[set].pop_front();
+    } else {
+        newEntry = entryList[set].back();
+        entryList[set].pop_back();
     }
-
-    if (freeList.empty())
-        evictLRU();
-
-    newEntry = freeList.front();
-    freeList.pop_front();
 
     *newEntry = entry;
     newEntry->lruSeq = nextSeq();
     newEntry->vaddr = vpn;
-    newEntry->trieHandle =
-    trie.insert(vpn, TlbEntryTrie::MaxBits - entry.logBytes, newEntry);
+    entryList[set].push_front(newEntry);
+    /*newEntry->trieHandle =
+    trie.insert(vpn, TlbEntryTrie::MaxBits - entry.logBytes, newEntry);*/
     return newEntry;
+}
+
+TLB::EntryList::iterator
+TLB::lookupIt(Addr va, bool update_lru)
+{
+    int set = (va >> TheISA::PageShift) & setMask;
+
+    auto entry = entryList[set].begin();
+    for (; entry != entryList[set].end(); ++entry) {
+        int page_size = (*entry)->size();
+
+        if ((*entry)->vaddr <= va && (*entry)->vaddr + page_size > va) {
+            if (update_lru) {
+                entryList[set].push_front(*entry);
+                entryList[set].erase(entry);
+                entry = entryList[set].begin();
+            }
+
+            break;
+        }
+    }
+
+    return entry;
 }
 
 TlbEntry *
 TLB::lookup(Addr va, bool update_lru)
 {
-    TlbEntry *entry = trie.lookup(va);
-    if (entry && update_lru)
-        entry->lruSeq = nextSeq();
-    return entry;
+    int set = (va >> TheISA::PageShift) & setMask;
+
+    auto entry = lookupIt(va, update_lru);
+
+    if (entry == entryList[set].end())
+        return nullptr;
+    else
+        return *entry;
 }
 
 void
 TLB::flushAll()
 {
     DPRINTF(TLB, "Invalidating all entries.\n");
-    for (unsigned i = 0; i < size; i++) {
-        if (tlb[i].trieHandle) {
-            trie.remove(tlb[i].trieHandle);
-            tlb[i].trieHandle = NULL;
-            freeList.push_back(&tlb[i]);
+
+    for (int i = 0; i < numSets; ++i) {
+        while (!entryList[i].empty()) {
+            TlbEntry *entry = entryList[i].front();
+            entryList[i].pop_front();
+            freeList[i].push_back(entry);
         }
     }
 }
@@ -160,11 +207,16 @@ void
 TLB::flushNonGlobal()
 {
     DPRINTF(TLB, "Invalidating all non global entries.\n");
-    for (unsigned i = 0; i < size; i++) {
-        if (tlb[i].trieHandle && !tlb[i].global) {
-            trie.remove(tlb[i].trieHandle);
-            tlb[i].trieHandle = NULL;
-            freeList.push_back(&tlb[i]);
+
+    for (int i = 0; i < numSets; ++i) {
+        for (auto entryIt = entryList[i].begin();
+             entryIt != entryList[i].end();) {
+            if (!(*entryIt)->global) {
+                freeList[i].push_back(*entryIt);
+                entryList[i].erase(entryIt++);
+            } else {
+                ++entryIt;
+            }
         }
     }
 }
@@ -172,11 +224,12 @@ TLB::flushNonGlobal()
 void
 TLB::demapPage(Addr va, uint64_t asn)
 {
-    TlbEntry *entry = trie.lookup(va);
-    if (entry) {
-        trie.remove(entry->trieHandle);
-        entry->trieHandle = NULL;
-        freeList.push_back(entry);
+    int set = (va >> TheISA::PageShift) & setMask;
+    auto entry = lookupIt(va, false);
+
+    if (entry != entryList[set].end()) {
+        freeList[set].push_back(*entry);
+        entryList[set].erase(entry);
     }
 }
 
@@ -513,9 +566,18 @@ TLB::serialize(CheckpointOut &cp) const
     SERIALIZE_SCALAR(lruSeq);
 
     uint32_t _count = 0;
+    /*
     for (uint32_t x = 0; x < size; x++) {
         if (tlb[x].trieHandle != NULL)
             tlb[x].serializeSection(cp, csprintf("Entry%d", _count++));
+    }*/
+
+    for (uint32_t set = 0; set < numSets; set++) {
+        for (int way = 0; way < freeList[set].size(); ++way) {
+            TlbEntry *entry = entryList[set].back();
+            entry->serializeSection(cp, csprintf("Entry%d", _count++));
+            //entryList[set].pop_back();
+        }
     }
 }
 
@@ -531,6 +593,7 @@ TLB::unserialize(CheckpointIn &cp)
 
     UNSERIALIZE_SCALAR(lruSeq);
 
+    /*
     for (uint32_t x = 0; x < _size; x++) {
         TlbEntry *newEntry = freeList.front();
         freeList.pop_front();
@@ -538,6 +601,18 @@ TLB::unserialize(CheckpointIn &cp)
         newEntry->unserializeSection(cp, csprintf("Entry%d", x));
         newEntry->trieHandle = trie.insert(newEntry->vaddr,
             TlbEntryTrie::MaxBits - newEntry->logBytes, newEntry);
+    }*/
+
+    for (int set = 0; set < numSets; ++set) {
+        for (int way = 0; way < freeList[set].size(); ++way) {
+            TlbEntry *newEntry = freeList[set].front();
+
+            int x = set *assoc + way;
+
+            newEntry->unserializeSection(cp, csprintf("Entry%d", x));
+            freeList[set].pop_front();
+            entryList[set].push_front(newEntry);
+        }
     }
 }
 
